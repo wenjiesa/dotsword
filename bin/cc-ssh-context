@@ -1,0 +1,17 @@
+#!/bin/bash
+# Claude Code SessionStart hook: if the user is attached over SSH (directly or via tmux),
+# tell Claude their browser runs on the SSH client machine, reachable via `cdt X@<client>`.
+conn=$SSH_CONNECTION
+if [ -n "$TMUX" ]; then
+  # tmux keeps the last attach's SSH_CONNECTION; no client attached = user isn't on SSH now
+  [ -n "$(tmux list-clients -t "$TMUX_PANE" 2>/dev/null)" ] || exit 0
+  conn=$(tmux show-environment -t "$TMUX_PANE" SSH_CONNECTION 2>/dev/null)
+  conn=${conn#SSH_CONNECTION=}
+fi
+case $conn in '' | -*) exit 0 ;; esac
+read -r client _ server _ <<<"$conn"
+cat <<EOF
+The user is attached over SSH from $client (their own machine); their browser runs there, not on this host.
+- Their rainbow Chrome: \`cdt <R|O|Y|G|B|I|V>@$client <command>\` (CDP forwarded tailnet-only, ports 9223-9229). Plain \`cdt R\` is this host's own Chrome. If unreachable, ask them to launch it (e.g. \`chromeR\`).
+- Their Chrome's localhost is their machine. To load a dev server running here, bind it to 0.0.0.0 and open http://$server:<port>; localhost-only origins (e.g. Firebase Auth domains) won't match, flag it if auth breaks.
+EOF
